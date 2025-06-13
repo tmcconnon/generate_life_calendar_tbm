@@ -20,7 +20,7 @@ KEY_BIRTHDAY_DESC = "Week of your birthday"
 XAXIS_DESC = "Weeks of the year"
 YAXIS_DESC = "Years of your life"
 
-FONT = "Georgia"
+FONT = "Helvetica"
 BIGFONT_SIZE = 40
 SMALLFONT_SIZE = 16
 TINYFONT_SIZE = 14
