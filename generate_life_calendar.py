@@ -20,7 +20,7 @@ KEY_BIRTHDAY_DESC = "Week of your birthday"
 XAXIS_DESC = "Weeks of the year"
 YAXIS_DESC = "Years of your life"
 
-FONT = "Brocha"
+FONT = "Georgia"
 BIGFONT_SIZE = 40
 SMALLFONT_SIZE = 16
 TINYFONT_SIZE = 14
@@ -28,7 +28,7 @@ TINYFONT_SIZE = 14
 MAX_TITLE_SIZE = 30
 DEFAULT_TITLE = "LIFE CALENDAR"
 
-Y_MARGIN = 144
+Y_MARGIN = 240
 BOX_MARGIN = 6
 
 MIN_AGE = 80
@@ -79,6 +79,33 @@ def draw_square(ctx, pos_x, pos_y, box_size, fillcolour=(1, 1, 1)):
 def text_size(ctx, text):
     _, _, width, height, _, _ = ctx.text_extents(text)
     return width, height
+
+
+def wrap_text(ctx, text, max_width):
+    """
+    Wraps text to fit within max_width, returns list of lines
+    """
+    words = text.split()
+    lines = []
+    current_line = ""
+    
+    for word in words:
+        test_line = current_line + (" " if current_line else "") + word
+        test_width, _ = text_size(ctx, test_line)
+        
+        if test_width <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line)
+                current_line = word
+            else:
+                lines.append(word)  # Word too long, add anyway
+    
+    if current_line:
+        lines.append(current_line)
+    
+    return lines
 
 
 def back_up_to_monday(date):
@@ -171,14 +198,6 @@ def draw_grid(ctx, date, birthdate, age, darken_until_date):
     pos_x = x_margin / 4
     pos_y = pos_x
 
-    # Draw the key for box colours
-    ctx.set_font_size(TINYFONT_SIZE)
-    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL,
-        cairo.FONT_WEIGHT_NORMAL)
-
-    pos_x = draw_key_item(ctx, pos_x, pos_y, KEY_BIRTHDAY_DESC, box_size, BIRTHDAY_COLOUR)
-    draw_key_item(ctx, pos_x, pos_y, KEY_NEWYEAR_DESC, box_size, NEWYEAR_COLOUR)
-
     # draw week numbers above top row
     ctx.set_font_size(TINYFONT_SIZE)
     ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL,
@@ -243,6 +262,34 @@ def gen_calendar(birthdate, title, age, filename, darken_until_date, sidebar_tex
     ctx.move_to((DOC_WIDTH / 2) - (w / 2), (Y_MARGIN / 2) - (h / 2))
     ctx.show_text(title)
 
+    # Draw Steve Jobs quote below title
+    quote = ("Remembering that I'll be dead soon is the most important tool I've ever encountered to help me make the big choices in life. Because almost everything—all external expectations, all pride, all fear of embarrassment or failure—these things just fall away in the face of death, leaving only what is truly important. Remembering that you are going to die is the best way I know to avoid the trap of thinking you have something to lose. You are already naked. There is no reason not to follow your heart.")
+
+    ctx.set_font_size(SMALLFONT_SIZE - 2)
+    ctx.select_font_face(FONT, cairo.FONT_SLANT_ITALIC, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_source_rgb(0.5, 0.5, 0.5)
+
+    # Wrap the quote text
+    quote_width = DOC_WIDTH - 200  # Leave margins
+    quote_lines = wrap_text(ctx, quote, quote_width)
+
+    # Position quote below title
+    line_height = 18
+    start_y = (Y_MARGIN / 2) + 20  # 20 pixels below title
+
+    # Draw each line of the quote
+    for i, line in enumerate(quote_lines):
+        w, h = text_size(ctx, line)
+        ctx.move_to((DOC_WIDTH / 2) - (w / 2), start_y + (i * line_height))
+        ctx.show_text(line)
+
+    # Add attribution
+    attribution = "— Steve Jobs"
+    ctx.set_font_size(SMALLFONT_SIZE - 3)
+    w, h = text_size(ctx, attribution)
+    ctx.move_to((DOC_WIDTH / 2) - (w / 2), start_y + (len(quote_lines) * line_height) + 15)
+    ctx.show_text(attribution)
+
     if subtitle_text is not None:
         ctx.set_source_rgb(0.7, 0.7, 0.7)
         ctx.set_font_size(SMALLFONT_SIZE)
@@ -263,6 +310,25 @@ def gen_calendar(birthdate, title, age, filename, darken_until_date, sidebar_tex
         ctx.set_source_rgb(0.7, 0.7, 0.7)
         ctx.rotate(-90 * math.pi / 180)
         ctx.show_text(sidebar_text)
+
+    # Draw the key at bottom
+    box_size_key = 20  # Fixed size for key boxes
+    key_y = DOC_HEIGHT - 80
+
+    ctx.set_font_size(TINYFONT_SIZE)
+    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_source_rgb(0, 0, 0)
+
+    # Center the key items
+    birthday_width, _ = text_size(ctx, KEY_BIRTHDAY_DESC)
+    newyear_width, _ = text_size(ctx, KEY_NEWYEAR_DESC)
+    total_key_width = (box_size_key * 4) + birthday_width + newyear_width + 60  # spacing
+    start_x = (DOC_WIDTH / 2) - (total_key_width / 2)
+
+    # Draw birthday key
+    pos_x = draw_key_item(ctx, start_x, key_y, KEY_BIRTHDAY_DESC, box_size_key, BIRTHDAY_COLOUR)
+    # Draw new year key
+    draw_key_item(ctx, pos_x, key_y, KEY_NEWYEAR_DESC, box_size_key, NEWYEAR_COLOUR)
 
     ctx.show_page()
 
@@ -294,10 +360,10 @@ def main():
     parser.add_argument('-a', '--age', type=int, dest='age', choices=range(MIN_AGE, MAX_AGE + 1),
                         metavar='[%s-%s]' % (MIN_AGE, MAX_AGE),
                         help=('Number of rows to generate, representing years of life'),
-                        default=90)
+                        default=100)
 
     parser.add_argument('-d', '--darken-until', type=parse_darken_until_date, dest='darken_until_date',
-                         nargs='?', const='today', help='Darken until date. '
+                         nargs='?', const='today', default='today', help='Darken until date. '
                         '(defaults to today if argument is not given)')
 
     args = parser.parse_args()
