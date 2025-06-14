@@ -15,21 +15,23 @@ DOC_HEIGHT = 2383  # 841mm / 33 1/8 inches
 DOC_NAME = "life_calendar.pdf"
 
 KEY_NEWYEAR_DESC = "First week of the new year"
-KEY_BIRTHDAY_DESC = "Week of your birthday"
+KEY_BIRTHDAY_DESC = "Week of Tom's birthday"
 
 XAXIS_DESC = "Weeks of the year"
 YAXIS_DESC = "Years of your life"
 
 FONT = "Helvetica"
-BIGFONT_SIZE = 40
+BIGFONT_SIZE = 44
 SMALLFONT_SIZE = 16
 TINYFONT_SIZE = 14
 
-MAX_TITLE_SIZE = 30
-DEFAULT_TITLE = "LIFE CALENDAR"
+MAX_TITLE_SIZE = 50
+DEFAULT_SUBTITLE = "LIFE CALENDAR"
+DEFAULT_TITLE = "Thomas Bostwick McConnon Jr."
 
-Y_MARGIN = 240
+Y_MARGIN = 330  # Adjusted for shorter quote
 BOX_MARGIN = 6
+BOTTOM_MARGIN = 120  # Space for key at bottom
 
 MIN_AGE = 80
 MAX_AGE = 100
@@ -108,8 +110,69 @@ def wrap_text(ctx, text, max_width):
     return lines
 
 
-def back_up_to_monday(date):
-    while date.weekday() != 0:
+def create_quote_lines(ctx, text, target_width):
+    """
+    Creates two balanced lines for the shortened Steve Jobs quote
+    """
+    lines = [
+        '"Remembering that I\'ll be dead soon is the most important tool I\'ve ever encountered to help me make the big choices in life. Because almost everything—all',
+        'external expectations, all pride, all fear of embarrassment or failure—these things just fall away in the face of death, leaving only what is truly important."'
+    ]
+    
+    return lines
+
+
+def draw_justified_text(ctx, text, x, y, target_width, is_last_line=False):
+    """
+    Draws text justified across target_width, but only if the line is close to target width
+    """
+    # Always center the last line
+    if is_last_line:
+        w, h = text_size(ctx, text)
+        ctx.move_to(x + (target_width / 2) - (w / 2), y)
+        ctx.show_text(text)
+        return
+    
+    # Check if line is close to target width - if not, just center it
+    natural_width, _ = text_size(ctx, text)
+    if natural_width < target_width * 0.75:  # If line is less than 75% of target width
+        # Just center it instead of justifying
+        w, h = text_size(ctx, text)
+        ctx.move_to(x + (target_width / 2) - (w / 2), y)
+        ctx.show_text(text)
+        return
+    
+    words = text.split()
+    if len(words) <= 1:
+        # Can't justify single word, just center it
+        w, h = text_size(ctx, text)
+        ctx.move_to(x + (target_width / 2) - (w / 2), y)
+        ctx.show_text(text)
+        return
+    
+    # Calculate total width of all words without spaces
+    total_word_width = sum(text_size(ctx, word)[0] for word in words)
+    
+    # Calculate how much space we need to distribute
+    total_space_needed = target_width - total_word_width
+    space_between_words = total_space_needed / (len(words) - 1)
+    
+    # Draw words with calculated spacing
+    current_x = x
+    for i, word in enumerate(words):
+        ctx.move_to(current_x, y)
+        ctx.show_text(word)
+        
+        word_width, _ = text_size(ctx, word)
+        current_x += word_width
+        
+        # Add space after word (except for last word)
+        if i < len(words) - 1:
+            current_x += space_between_words
+
+
+def back_up_to_sunday(date):
+    while date.weekday() != 6:
         date -= datetime.timedelta(days=1)
     return date
 
@@ -144,7 +207,7 @@ def parse_darken_until_date(date):
     else:
         until_date = parse_date(date)
 
-    return back_up_to_monday(until_date)
+    return back_up_to_sunday(until_date)
 
 
 def get_darkened_fill(fill):
@@ -191,7 +254,9 @@ def draw_grid(ctx, date, birthdate, age, darken_until_date):
     Draws the whole grid of 52x90 squares
     """
     num_rows = age
-    box_size = ((DOC_HEIGHT - (Y_MARGIN + 36)) / num_rows) - BOX_MARGIN
+    # Account for both top and bottom margins
+    available_height = DOC_HEIGHT - Y_MARGIN - BOTTOM_MARGIN
+    box_size = (available_height / num_rows) - BOX_MARGIN
     x_margin = (DOC_WIDTH - ((box_size + BOX_MARGIN) * NUM_COLUMNS)) / 2
 
     start_date = date
@@ -234,7 +299,7 @@ def draw_grid(ctx, date, birthdate, age, darken_until_date):
         pos_y += box_size + BOX_MARGIN
         date += datetime.timedelta(weeks=52)
 
-    return x_margin
+    return x_margin, box_size
 
 def gen_calendar(birthdate, title, age, filename, darken_until_date, sidebar_text=None,
                  subtitle_text=None):
@@ -254,66 +319,85 @@ def gen_calendar(birthdate, title, age, filename, darken_until_date, sidebar_tex
     ctx.rectangle(0, 0, DOC_WIDTH, DOC_HEIGHT)
     ctx.fill()
 
-    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL,
-        cairo.FONT_WEIGHT_BOLD)
+    # Draw subtitle (LIFE CALENDAR) - smaller, above main title
+    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_source_rgb(0.5, 0.5, 0.5)  # Gray color
+    ctx.set_font_size(SMALLFONT_SIZE + 2)  # Slightly larger font for subtitle
+    subtitle_w, subtitle_h = text_size(ctx, DEFAULT_SUBTITLE)
+    subtitle_y = (Y_MARGIN / 4) - (subtitle_h / 2)
+    ctx.move_to((DOC_WIDTH / 2) - (subtitle_w / 2), subtitle_y)
+    ctx.show_text(DEFAULT_SUBTITLE)
+
+    # Draw main title (name) - larger, bold, below subtitle
+    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
     ctx.set_source_rgb(0, 0, 0)
     ctx.set_font_size(BIGFONT_SIZE)
-    w, h = text_size(ctx, title)
-    ctx.move_to((DOC_WIDTH / 2) - (w / 2), (Y_MARGIN / 2) - (h / 2))
+    title_w, title_h = text_size(ctx, title)
+    title_y = subtitle_y + 55  # More space between subtitle and title
+    ctx.move_to((DOC_WIDTH / 2) - (title_w / 2), title_y)
     ctx.show_text(title)
 
-    # Draw Steve Jobs quote below title
-    quote = ("Remembering that I'll be dead soon is the most important tool I've ever encountered to help me make the big choices in life. Because almost everything—all external expectations, all pride, all fear of embarrassment or failure—these things just fall away in the face of death, leaving only what is truly important. Remembering that you are going to die is the best way I know to avoid the trap of thinking you have something to lose. You are already naked. There is no reason not to follow your heart.")
+    # Draw Steve Jobs quote below title with better spacing
+    quote_text = "Remembering that I'll be dead soon is the most important tool I've ever encountered to help me make the big choices in life. Because almost everything—all external expectations, all pride, all fear of embarrassment or failure—these things just fall away in the face of death, leaving only what is truly important."
+    
+    # Add quotation marks
+    quote = f'"{quote_text}"'
 
     ctx.set_font_size(SMALLFONT_SIZE - 2)
     ctx.select_font_face(FONT, cairo.FONT_SLANT_ITALIC, cairo.FONT_WEIGHT_NORMAL)
-    ctx.set_source_rgb(0.5, 0.5, 0.5)
+    ctx.set_source_rgb(0.4, 0.4, 0.4)
 
-    # Wrap the quote text
-    quote_width = DOC_WIDTH - 200  # Leave margins
-    quote_lines = wrap_text(ctx, quote, quote_width)
+    # Create two balanced lines  
+    quote_lines = create_quote_lines(ctx, quote, 0)
 
-    # Position quote below title
-    line_height = 18
-    start_y = (Y_MARGIN / 2) + 20  # 20 pixels below title
+    # Position quote with more space below title
+    line_height = 22  # Increased from 18 for better readability
+    start_y = title_y + 50  # More space between title and quote
+    quote_width = DOC_WIDTH - 400  # Width for justification
+    quote_start_x = (DOC_WIDTH / 2) - (quote_width / 2)
 
-    # Draw each line of the quote
+    # Draw each line of the quote - centered, no justification
     for i, line in enumerate(quote_lines):
         w, h = text_size(ctx, line)
         ctx.move_to((DOC_WIDTH / 2) - (w / 2), start_y + (i * line_height))
         ctx.show_text(line)
 
-    # Add attribution
-    attribution = "— Steve Jobs"
+    # Add attribution with better spacing
+    attribution = "— Steve Jobs, 2005 Stanford University Commencement Speech"
     ctx.set_font_size(SMALLFONT_SIZE - 3)
-    w, h = text_size(ctx, attribution)
-    ctx.move_to((DOC_WIDTH / 2) - (w / 2), start_y + (len(quote_lines) * line_height) + 15)
+    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_source_rgb(0.6, 0.6, 0.6)
+    attr_w, attr_h = text_size(ctx, attribution)
+    attribution_y = start_y + (len(quote_lines) * line_height) + 15  # Adjusted for shorter quote
+    ctx.move_to((DOC_WIDTH / 2) - (attr_w / 2), attribution_y)
     ctx.show_text(attribution)
 
     if subtitle_text is not None:
         ctx.set_source_rgb(0.7, 0.7, 0.7)
         ctx.set_font_size(SMALLFONT_SIZE)
         w, h = text_size(ctx, subtitle_text)
-        ctx.move_to((DOC_WIDTH / 2) - (w / 2), (Y_MARGIN / 2) - (h / 2) + 15)
+        ctx.move_to((DOC_WIDTH / 2) - (w / 2), attribution_y + 30)
         ctx.show_text(subtitle_text)
 
-    date = back_up_to_monday(birthdate)
+    date = back_up_to_sunday(birthdate)
 
-    # Draw 52x90 grid of squares
-    x_margin = draw_grid(ctx, date, birthdate, age, darken_until_date)
+    # Draw 52x100 grid of squares
+    x_margin, box_size = draw_grid(ctx, date, birthdate, age, darken_until_date)
 
     if sidebar_text is not None:
         # Draw text on sidebar
+        ctx.set_font_size(SMALLFONT_SIZE)
+        ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.set_source_rgb(0.7, 0.7, 0.7)
         w, h = text_size(ctx, sidebar_text)
         ctx.move_to((DOC_WIDTH - x_margin) + 20, Y_MARGIN + w + 100)
-        ctx.set_font_size(SMALLFONT_SIZE)
-        ctx.set_source_rgb(0.7, 0.7, 0.7)
         ctx.rotate(-90 * math.pi / 180)
         ctx.show_text(sidebar_text)
+        ctx.rotate(90 * math.pi / 180)  # Rotate back
 
-    # Draw the key at bottom
+    # Draw the key at bottom with proper positioning
     box_size_key = 20  # Fixed size for key boxes
-    key_y = DOC_HEIGHT - 80
+    key_y = DOC_HEIGHT - 60  # Proper bottom margin
 
     ctx.set_font_size(TINYFONT_SIZE)
     ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
