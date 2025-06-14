@@ -1,3 +1,10 @@
+In Terminal run: 
+
+cd ~/Downloads/generate_life_calendar_tbm-master
+
+python3 generate_life_calendar.py "09/05/1982" -d "13/06/2025" [<- sub for today's date]
+
+
 Personalised Life Calendar Generator
 ====================================
 
